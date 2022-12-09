@@ -35,6 +35,7 @@ import (
 	"github.com/koordinator-sh/koordinator/pkg/koordlet/audit"
 	"github.com/koordinator-sh/koordinator/pkg/koordlet/config"
 	"github.com/koordinator-sh/koordinator/pkg/koordlet/runtimehooks"
+	koordletutil "github.com/koordinator-sh/koordinator/pkg/koordlet/util"
 )
 
 func init() {}
@@ -46,6 +47,10 @@ func main() {
 
 	go wait.Forever(klog.Flush, 5*time.Second)
 	defer klog.Flush()
+
+	if err := os.Mkdir(koordletutil.GetBeCPUSetDir(), 0644); err != nil && !os.IsExist(err) {
+		klog.Fatalf("Unable create be cpuset dir: %v", err)
+	}
 
 	if *options.EnablePprof {
 		go func() {

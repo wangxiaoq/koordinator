@@ -26,6 +26,11 @@ import (
 	"github.com/koordinator-sh/koordinator/pkg/util/cpuset"
 )
 
+const (
+	// file contains besteffort cpuset value
+	BeCpusetValueDir = "becpuset/"
+)
+
 func GetRootCgroupSubfsDir(subfs string) string {
 	return filepath.Join(system.Conf.CgroupRootDir, subfs)
 }
@@ -65,4 +70,18 @@ func GetRootCgroupCurCFSQuota(qosClass corev1.PodQOSClass) (int64, error) {
 func GetRootCgroupCurCFSPeriod(qosClass corev1.PodQOSClass) (int64, error) {
 	rootCgroupParentDir := GetKubeQosRelativePath(qosClass)
 	return resourceexecutor.NewCgroupReader().ReadCPUPeriod(rootCgroupParentDir)
+}
+
+// GetBeCPUSetDir returns the cgroup dir contains cpu index for be pods
+func GetBeCPUSetDir() string {
+	return filepath.Join(system.Conf.CgroupRootDir, "cpuset", BeCpusetValueDir)
+}
+
+// ReadCgroupCPUSet gets the cpuset cpus from the specified cgroup cpuset dir
+func ReadCgroupCPUSet(cgroupFileDir string) ([]int32, error) {
+	cpus, err := resourceexecutor.NewCgroupReader().ReadCPUSet(cgroupFileDir)
+	if err != nil {
+		return nil, err
+	}
+	return cpuset.ParseCPUSet(cpus), nil
 }

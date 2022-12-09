@@ -195,6 +195,7 @@ func (r *CPUSuppress) applyCPUSetWithNonePolicy(cpus []int32, oldCPUSet []int32)
 		klog.Warningf("applyCPUSetWithNonePolicy failed to get be cgroup cpuset paths, err: %s", err)
 		return fmt.Errorf("apply be suppress policy failed, err: %s", err)
 	}
+	cpusetCgroupPaths = append(cpusetCgroupPaths, koordletutil.BeCpusetValueDir)
 
 	// write a loose cpuset for all be cgroups before applying the real policy
 	mergedCPUSet := cpuset.MergeCPUSet(oldCPUSet, cpus)
@@ -223,6 +224,7 @@ func (r *CPUSuppress) applyCPUSetWithStaticPolicy(cpus []int32) error {
 		klog.Warningf("applyCPUSetWithStaticPolicy failed to get be cgroup cpuset paths, err: %s", err)
 		return fmt.Errorf("apply be suppress policy failed, err: %s", err)
 	}
+	containerPaths = append(containerPaths, koordletutil.BeCpusetValueDir)
 
 	cpusetStr := cpuset.GenerateCPUSetStr(cpus)
 	klog.V(6).Infof("applyCPUSetWithStaticPolicy writes suppressed cpuset to containers, cpuset %v", cpus)
@@ -406,6 +408,7 @@ func (r *CPUSuppress) recoverCPUSetIfNeed(maxDepth int) {
 		klog.Warningf("recover bestEffort cpuset failed, get be cgroup cpuset paths  err: %s", err)
 		return
 	}
+	cpusetCgroupPaths = append(cpusetCgroupPaths, koordletutil.BeCpusetValueDir)
 
 	cpusetStr := beCPUSet.String()
 	klog.V(6).Infof("recover bestEffort cpuset, cpuset %v", cpusetStr)
