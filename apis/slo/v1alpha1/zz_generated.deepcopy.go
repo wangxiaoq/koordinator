@@ -718,6 +718,11 @@ func (in *ResourceThresholdStrategy) DeepCopyInto(out *ResourceThresholdStrategy
 		*out = new(bool)
 		**out = **in
 	}
+	if in.CPUSuppressWithResLimit != nil {
+		in, out := &in.CPUSuppressWithResLimit, &out.CPUSuppressWithResLimit
+		*out = new(bool)
+		**out = **in
+	}
 	if in.CPUSuppressThresholdPercent != nil {
 		in, out := &in.CPUSuppressThresholdPercent, &out.CPUSuppressThresholdPercent
 		*out = new(int64)

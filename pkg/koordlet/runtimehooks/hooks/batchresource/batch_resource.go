@@ -25,6 +25,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	apiext "github.com/koordinator-sh/koordinator/apis/extension"
+	slov1alpha1 "github.com/koordinator-sh/koordinator/apis/slo/v1alpha1"
 	"github.com/koordinator-sh/koordinator/pkg/koordlet/resourceexecutor"
 	"github.com/koordinator-sh/koordinator/pkg/koordlet/runtimehooks/hooks"
 	"github.com/koordinator-sh/koordinator/pkg/koordlet/runtimehooks/protocol"
@@ -162,7 +163,7 @@ func (p *plugin) SetPodCFSQuota(proto protocol.HooksProtocol) error {
 	}
 
 	// if cfs quota is disabled, set as -1
-	if !p.getRule().getEnableCFSQuota() {
+	if !p.getRule().getCPUSuppressWithResLimit() || p.getRule().getCPUSuppressPolicy() == slov1alpha1.CPUCfsQuotaPolicy {
 		podCtx.Response.Resources.CFSQuota = pointer.Int64Ptr(-1)
 		klog.V(5).Infof("try to unset pod-level cfs quota since it is disabled in rule of plugin %v", name)
 		return nil
@@ -307,7 +308,19 @@ func (p *plugin) SetContainerCFSQuota(proto protocol.HooksProtocol) error {
 	}
 
 	// if cfs quota is disabled, set as -1
-	if !p.getRule().getEnableCFSQuota() {
+	if p.getRule().getCPUSuppressPolicy() == slov1alpha1.CPUCfsQuotaPolicy {
+		if !p.getRule().getCPUSuppressWithResLimit() {
+			containerCtx.Response.Resources.CFSQuota = pointer.Int64Ptr(-1)
+			klog.V(5).Infof("try to unset container-level cfs quota since it is disabled in rule of plugin %v", name)
+			return nil
+		} else {
+			containerCtx.Response.Resources.CFSQuota = nil
+			klog.V(5).Infof("no update container-level cfs quota since CPUSuppressWithResLimit is enabled in rule of plugin %v", name)
+			return nil
+		}
+	}
+
+	if p.getRule().getCPUSuppressPolicy() == slov1alpha1.CPUSetPolicy && !p.getRule().getCPUSuppressWithResLimit() {
 		containerCtx.Response.Resources.CFSQuota = pointer.Int64Ptr(-1)
 		klog.V(5).Infof("try to unset container-level cfs quota since it is disabled in rule of plugin %v", name)
 		return nil

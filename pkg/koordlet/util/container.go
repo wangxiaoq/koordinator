@@ -111,3 +111,18 @@ func GetPIDsInContainer(podParentDir string, c *corev1.ContainerStatus) ([]uint3
 	}
 	return pids, nil
 }
+
+func GetContainerId(pod *corev1.Pod, containerName string) string {
+	for _, containerStatus := range pod.Status.ContainerStatuses {
+		if containerStatus.Name == containerName {
+			containerId := strings.Split(containerStatus.ContainerID, "://")
+			if len(containerId) < 2 {
+				return ""
+			} else {
+				return containerId[1]
+			}
+		}
+	}
+
+	return ""
+}

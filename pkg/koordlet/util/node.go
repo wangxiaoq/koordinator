@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 
+	slov1alpha1 "github.com/koordinator-sh/koordinator/apis/slo/v1alpha1"
 	"github.com/koordinator-sh/koordinator/pkg/koordlet/resourceexecutor"
 	"github.com/koordinator-sh/koordinator/pkg/koordlet/util/system"
 	"github.com/koordinator-sh/koordinator/pkg/util/cpuset"
@@ -126,4 +127,12 @@ func GetBECPUSetPathsByTargetDepth(relativeDepth int) ([]string, error) {
 		return nil
 	})
 	return containerPaths, err
+}
+
+func IsCPUSuppressWithResLimit(spec *slov1alpha1.NodeSLOSpec) bool {
+	if spec == nil || *spec == (slov1alpha1.NodeSLOSpec{}) {
+		return false
+	}
+
+	return *(spec.ResourceUsedThresholdWithBE.CPUSuppressWithResLimit)
 }

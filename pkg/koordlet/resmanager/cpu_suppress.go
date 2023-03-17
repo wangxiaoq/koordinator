@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"path/filepath"
 	"sort"
 	"strconv"
 
@@ -441,14 +442,102 @@ func (r *CPUSuppress) adjustByCfsQuota(cpuQuantity *resource.Quantity, node *cor
 		klog.V(4).Infof("failed to get be cfs quota updater, err: %v", err)
 		return
 	}
-	isUpdated, err := r.executor.Update(false, updater)
-	if err != nil {
-		klog.Errorf("suppressBECPU: failed to write cfs_quota_us for be pods, error: %v", err)
-		return
+
+	isUpdated := false
+	if currentBeQuota < 0 || newBeQuota < currentBeQuota {
+		err = r.applyCfsQuota(newBeQuota)
+		if err != nil {
+			klog.Errorf("Apply cfs quota of be pods error: %v", err)
+			return
+		}
+
+		isUpdated, err = r.executor.Update(false, updater)
+		if err != nil {
+			klog.Errorf("suppressBECPU: failed to write cfs_quota_us for be pods, error: %v", err)
+			return
+		}
+	} else {
+		isUpdated, err = r.executor.Update(false, updater)
+		if err != nil {
+		    klog.Errorf("suppressBECPU: failed to write cfs_quota_us for be pods, error: %v", err)
+		    return
+		}
+
+		err = r.applyCfsQuota(newBeQuota)
+		if err != nil {
+			klog.Errorf("Apply cfs quota of be pods error: %v", err)
+			return
+		}
 	}
+
 	metrics.RecordBESuppressCores(string(slov1alpha1.CPUCfsQuotaPolicy), float64(newBeQuota)/float64(cfsPeriod))
 	_ = audit.V(1).Node().Reason(resourceexecutor.AdjustBEByNodeCPUUsage).Message("update BE group to cfs_quota: %v", newBeQuota).Do()
 	klog.Infof("suppressBECPU: succeeded to write cfs_quota_us for offline pods, isUpdated %v, new value: %d", isUpdated, newBeQuota)
+}
+
+// applyCfsQuota apply BE containers' cpu quota
+func (r *CPUSuppress) applyCfsQuota(newBeQuota int64) error {
+	nodeSlo := r.resmanager.getNodeSLOCopy()
+	if nodeSlo == nil || !koordletutil.IsCPUSuppressWithResLimit(&(nodeSlo.Spec)) {
+		klog.V(4).Infof("CPU suppress with container resource limit disabled. skip...")
+		return nil
+	}
+	klog.V(5).Infof("CPU suppress with container resource limit enabled")
+
+	beContainersLimits := r.GetNodeBEContainersLimits()
+	klog.V(5).Infof("Be conatiners CPU cfs quota: %v", beContainersLimits)
+	r.writeBECgroupsCfsQuota(beContainersLimits, newBeQuota)
+
+	return nil
+}
+
+// GetNodeBEContainersLimits return a map for BE containers:
+// key: BE container cgroup path
+// value: BE container batch-cpu limit
+func (r *CPUSuppress) GetNodeBEContainersLimits() map[string]int64 {
+	containersLimits := make(map[string]int64)
+	podMetas := r.resmanager.statesInformer.GetAllPods()
+	for _, podMeta := range podMetas {
+		pod := podMeta.Pod
+		if pod.Status.QOSClass != corev1.PodQOSBestEffort {
+			continue
+		}
+		podCgroupDir := koordletutil.GetPodCgroupDirWithKube(podMeta.CgroupDir)
+
+		for _, container := range pod.Spec.Containers {
+			containerName := container.Name
+			containerId := koordletutil.GetContainerId(pod, containerName)
+			if len(containerId) == 0 {
+				klog.V(4).Infof("Get container [%s] in pod [%s/%s] id empty, skip...", containerName, pod.Namespace, pod.Name)
+				continue
+			}
+			cpuLimit := container.Resources.Limits[apiext.BatchCPU]
+			cpuQuota := (&cpuLimit).Value() * cfsPeriod / 1000
+			containerCgroupDir := filepath.Join(podCgroupDir, containerId)
+			containersLimits[containerCgroupDir] = cpuQuota
+		}
+	}
+
+	return containersLimits
+}
+
+func (r *CPUSuppress) writeBECgroupsCfsQuota(beContainerLimits map[string]int64, newBeQuota int64) {
+	var updaters []resourceexecutor.ResourceUpdater
+	eventHelper := audit.V(3).Reason(resourceexecutor.AdjustBEByNodeCPUUsage).Message("update BE group to cfsquota")
+	for path, limit := range beContainerLimits {
+		quota := int64(math.Min(float64(newBeQuota), float64(limit)))
+		if quota == 0 {
+			quota = -1
+		}
+		u, err := resourceexecutor.DefaultCgroupUpdaterFactory.New(system.CPUCFSQuotaName, path, strconv.FormatInt(quota, 10), eventHelper)
+		if err != nil {
+			klog.V(4).Infof("failed to get cpu cfs quota updater: path %s, err %s", path, err)
+			continue
+		}
+
+		updaters = append(updaters, u)
+	}
+	r.executor.UpdateBatch(true, updaters...)
 }
 
 func (r *CPUSuppress) recoverCFSQuotaIfNeed() {

@@ -25,33 +25,45 @@ import (
 	slov1alpha1 "github.com/koordinator-sh/koordinator/apis/slo/v1alpha1"
 	"github.com/koordinator-sh/koordinator/pkg/koordlet/runtimehooks/protocol"
 	"github.com/koordinator-sh/koordinator/pkg/koordlet/statesinformer"
+	koordletutil "github.com/koordinator-sh/koordinator/pkg/koordlet/util"
 	"github.com/koordinator-sh/koordinator/pkg/util"
 )
 
 type batchResourceRule struct {
-	enableCFSQuota bool
+	cpuSuppressPolicy slov1alpha1.CPUSuppressPolicy
+	cpuSuppressWithResLimit bool
 }
 
-func (r *batchResourceRule) getEnableCFSQuota() bool {
+func (r *batchResourceRule) getCPUSuppressPolicy() slov1alpha1.CPUSuppressPolicy {
 	if r == nil {
-		return true
+		return ""
 	}
-	return r.enableCFSQuota
+	return r.cpuSuppressPolicy
+}
+
+func (r *batchResourceRule) getCPUSuppressWithResLimit () bool {
+	if r == nil {
+		return false
+	}
+	return r.cpuSuppressWithResLimit
 }
 
 func (p *plugin) parseRule(mergedNodeSLOIf interface{}) (bool, error) {
 	mergedNodeSLO := mergedNodeSLOIf.(*slov1alpha1.NodeSLOSpec)
 
-	enableCFSQuota := true
-	// NOTE: If CPU Suppress Policy `CPUCfsQuotaPolicy` is enabled for batch pods, batch pods' cfs_quota should be unset
-	// since the cfs quota of `kubepods-besteffort` is required to be no less than the children's. Then the cpu usage
-	// of Batch is limited by pod-level cpu.shares and qos-level cfs_quota.
-	if enable, policy := getCPUSuppressPolicy(mergedNodeSLO); enable && policy == slov1alpha1.CPUCfsQuotaPolicy {
-		enableCFSQuota = false
+	enable, cpuSuppressPolicy := getCPUSuppressPolicy(mergedNodeSLO)
+	if !enable {
+		cpuSuppressPolicy = slov1alpha1.CPUSuppressPolicy("")
 	}
 
-	rule := &batchResourceRule{
-		enableCFSQuota: enableCFSQuota,
+	cpuSuppressWithResLimit  := true
+	if enable && !koordletutil.IsCPUSuppressWithResLimit(mergedNodeSLO) {
+		cpuSuppressWithResLimit = false
+	}
+
+	rule := &batchResourceRule {
+		cpuSuppressPolicy:       cpuSuppressPolicy,
+		cpuSuppressWithResLimit: cpuSuppressWithResLimit,
 	}
 
 	updated := p.updateRule(rule)

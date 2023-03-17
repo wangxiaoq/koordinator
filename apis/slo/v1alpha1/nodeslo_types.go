@@ -165,6 +165,8 @@ type ResourceThresholdStrategy struct {
 	CPUSuppressThresholdPercent *int64 `json:"cpuSuppressThresholdPercent,omitempty"`
 	// CPUSuppressPolicy
 	CPUSuppressPolicy CPUSuppressPolicy `json:"cpuSuppressPolicy,omitempty"`
+	// CPUSuppressWithResLimit
+	CPUSuppressWithResLimit *bool `json:"cpuSuppressWithResLimit,omitempty"`
 
 	// upper: memory evict threshold percentage (0,100), default = 70
 	// +kubebuilder:validation:Maximum=100

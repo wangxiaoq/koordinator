@@ -811,6 +811,9 @@ spec:
                       then start evict
                     format: int64
                     type: integer
+                  cpuSuppressWithResLimit:
+                    description: cpu suppress with container resource limit in suppress mode. default = false
+                    type: boolean
                   cpuEvictTimeWindowSeconds:
                     description: cpu evict start after continue avg(cpuusage) > CPUEvictThresholdPercent
                       in seconds
